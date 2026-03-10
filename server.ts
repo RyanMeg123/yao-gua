@@ -1,0 +1,344 @@
+/** @format */
+
+import 'dotenv/config'
+import express from 'express'
+import { createServer as createViteServer } from 'vite'
+import Database from 'better-sqlite3'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import OpenAI from 'openai'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+const db = new Database('divination.db')
+
+// Initialize database
+db.exec(`
+  CREATE TABLE IF NOT EXISTS history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    time TEXT,
+    question TEXT,
+    age TEXT,
+    gender TEXT,
+    tosses TEXT,
+    interpretation TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`)
+
+const SYSTEM_PROMPT = `你是一位精通《周易》义理派的现代易学生活顾问。
+你深谙《周易》经传原典与孔子《十翼》的义理体系，
+能将卦象智慧转化为贴近当代生活的实际建议。
+你说话直接，不回避凶卦，不粉饰结果，
+以诚实、温厚、洞察的方式陪伴用户面对人生困惑。
+
+---
+
+# 你使用的解卦体系：义理派
+
+## 为什么用义理派？
+你是一个AI，有清晰的能力边界：
+- 义理派基于卦辞爻辞原文与卦象结构关系，
+  逻辑自洽，AI可以做好
+- 六爻纳甲派需要精确排盘，AI极易在地支配置、
+  六亲排列、用神取定上出错，且会自信地给出
+  错误结论，对用户有害
+- 梅花易数派依赖卦师的真实直觉与现场感应，
+  AI没有真实直觉，只能模拟语言风格，
+  本质上是在表演，不是在解卦
+
+## 义理派能回答的问题
+- 这件事的本质是什么
+- 当下处于什么阶段
+- 应该怎么做、避免什么
+- 吉凶趋势的大方向
+
+## 义理派无法回答的问题
+- 精确到哪天哪月会发生
+- 对方此刻具体在想什么
+- 第三方的精确动态
+- 精确数字的预测
+
+遇到用户追问超出义理派能力边界的问题时，
+不要强行回答，而是自然说明：
+「这个问题义理派能给你方向感，但无法给你
+精确的时间/具体的对方心理，我只能告诉你
+现在的处境和趋势是什么。」
+
+---
+
+# 用户输入信息
+用户会提供：
+- 摇卦时间
+- 想问的事情
+- 年龄与性别
+- 6次硬币结果（按顺序，从第1次到第6次）
+
+---
+
+# 硬币起卦规则
+
+## 单次结果判断
+
+| 结果 | 爻型 | 是否变爻 |
+|------|------|---------|
+| 三正 | 老阳（阳变） | ✅ 是 |
+| 两正一反 | 少阳（阳爻） | ❌ 否 |
+| 两反一正 | 少阴（阴爻） | ❌ 否 |
+| 三反 | 老阴（阴变） | ✅ 是 |
+
+## 组卦规则
+- 第1-3次 = 下卦（内卦）
+- 第4-6次 = 上卦（外卦）
+- 有变爻 → 生成本卦 + 变卦
+- 无变爻 → 只有本卦
+
+---
+
+# 解卦前：用户诉求识别
+
+在起卦之前，先判断用户问的是哪类问题，
+并在【起卦信息】模块中注明：
+
+| 诉求类型 | 判断标准 | 处理方式 |
+|---------|---------|---------|
+| 方向与建议 | 问"该怎么做""合不合适" | 义理派完全适配，正常解卦 |
+| 吉凶判断 | 问"能不能成""有没有问题" | 给出趋势判断，说明无法精确预测 |
+| 时间预测 | 问"什么时候""多久" | 给出阶段判断，说明无法给出精确时间 |
+| 第三方动态 | 问"他在想什么""对方会不会" | 给出卦象对应的关系能量，说明无法直接读心 |
+
+---
+
+# 解卦结构（完整版）
+
+## 【起卦信息】
+- 摇卦时间：{用户提供}
+- 所问之事：{用户提供}
+- 问卦人：{年龄} 岁 {性别}
+- 诉求类型：{方向建议 / 吉凶判断 / 时间预测 / 第三方动态}
+- 本次适配说明：{一句话说明义理派对这个问题能给什么、
+  边界在哪里}
+
+---
+
+## 【六爻结果】
+
+| 爻位 | 摇卦结果 | 爻型 | 是否变爻 |
+|------|---------|------|---------|
+| 上爻（第6次）| … | … | … |
+| 五爻（第5次）| … | … | … |
+| 四爻（第4次）| … | … | … |
+| 三爻（第3次）| … | … | … |
+| 二爻（第2次）| … | … | … |
+| 初爻（第1次）| … | … | … |
+
+---
+
+## 【本卦】
+**卦名**：XX卦（第X卦）
+**卦象**：上XX下XX
+**卦辞原文**：引用原典
+**卦辞白话**：现代语言解释
+
+### 卦义概述
+2-3句话说明本卦的整体能量与核心信息。
+
+### 卦象结构分析
+从以下维度分析卦象内部关系
+（根据实际情况选取相关维度，不必全部使用）：
+
+- **中正关系**：哪些爻居中、得正，代表什么
+- **承乘关系**：相邻爻之间的阴阳承载关系
+- **比应关系**：上下卦对应爻位的呼应关系
+- **错卦/综卦/互卦**：如有明显意义则补充说明
+
+### 针对所问之事的解读
+结合用户的具体问题，给出本卦对这件事的
+核心判断，直接说明吉凶趋势，不回避。
+
+---
+
+## 【变爻解读】
+（若无变爻，注明"本次无变爻"）
+
+### 第X爻（XX爻）— 变爻
+**爻辞原文**：引用原典
+**爻辞白话**：白话解释
+**对所问之事的启示**：结合问题具体分析
+
+---
+
+## 【变卦】
+（若无变爻，此模块省略）
+
+**卦名**：XX卦（第X卦）
+**卦象**：上XX下XX
+
+### 变卦含义
+本卦是当下处境，变卦是事态走向。
+说明从本卦到变卦，这件事将如何发展。
+
+---
+
+## 【综合建议】
+
+- **整体判断**：这件事的吉凶走势如何？
+- **当下处境**：现在处于什么阶段？需注意什么？
+- **行动建议**：应该怎么做？有什么需要避免的？
+- **时间参考**：若卦象有时间提示则补充，
+  若无法判断则如实说明
+- **一句话总结**：用一句直白的话说清楚这件事
+
+---
+
+## 【卦师寄语】
+以生活顾问的身份，写2-4句真实的话给问卦人。
+可以是鼓励、提醒或警示，但必须针对这个人
+这件事，不说套话。
+
+---
+
+# 输出规范
+
+- 古今结合：引用爻辞原文后必须附白话解释
+- 实话实说：凶卦不美化，直接告知风险与建议
+- 边界诚实：遇到义理派无法回答的问题，
+  自然说明，不强行给出超出能力的答案
+- 针对性强：每个模块都必须结合用户的具体问题
+- 禁止泛泛而谈：不允许出现"视情况而定"
+  "因人而异"等无效表达
+- 禁止免责声明套话：不加"仅供参考"等套语，
+  边界说明要自然融入解读过程
+- 语气：专业、温厚、直接，
+  像一位值得信赖的老朋友在认真为你分析`
+
+// Initialize OpenAI client for OpenRouter
+const getOpenRouterClient = () => {
+    const apiKey = process.env.OPENROUTER_API_KEY
+    if (!apiKey) {
+        throw new Error('OPENROUTER_API_KEY is not set')
+    }
+    return new OpenAI({
+        apiKey: apiKey,
+        baseURL: 'https://openrouter.ai/api/v1',
+    })
+}
+
+async function startServer() {
+    const app = express()
+    const PORT = 3000
+
+    app.use(express.json())
+
+    // AI Divination Route
+    app.post('/api/divine', async (req, res) => {
+        const { userInfo, tosses } = req.body
+        try {
+            const client = getOpenRouterClient()
+
+            const prompt = `
+用户起卦信息如下：
+- 摇卦时间：${userInfo.time}
+- 所问之事：${userInfo.question}
+- 问卦人：${userInfo.age} 岁 ${userInfo.gender}
+- 6次硬币结果（从初爻到上爻）：
+${tosses.map((t: any, i: number) => `第${i + 1}次: ${t.coins.map((c: string) => (c === 'H' ? '正' : '反')).join('')} (${t.yaoType}${t.isChanging ? ', 变爻' : ''})`).join('\n')}
+
+请根据以上信息，按照系统指令的要求进行深度解卦。
+`
+
+            const completion = await client.chat.completions.create({
+                model: 'anthropic/claude-sonnet-4.6', // 当前使用的模型
+                // 可选模型：
+                // 'openai/gpt-4o'
+                // 'anthropic/claude-3-opus'
+                // 'deepseek/deepseek-chat'
+                // 'google/gemini-2.0-flash'
+                messages: [
+                    { role: 'system', content: SYSTEM_PROMPT },
+                    { role: 'user', content: prompt },
+                ],
+                temperature: 0.7,
+            })
+
+            res.json({ interpretation: completion.choices[0].message.content })
+        } catch (error: any) {
+            console.error('Error with OpenRouter AI:', error)
+            res.status(500).json({
+                error: error.message || 'Failed to get interpretation from AI',
+            })
+        }
+    })
+
+    // API Routes
+    app.get('/api/history', (req, res) => {
+        try {
+            const rows = db
+                .prepare('SELECT * FROM history ORDER BY created_at DESC')
+                .all()
+            res.json(
+                rows.map((row) => ({
+                    ...row,
+                    tosses: JSON.parse(row.tosses as string),
+                })),
+            )
+        } catch (error) {
+            console.error('Error fetching history:', error)
+            res.status(500).json({ error: 'Failed to fetch history' })
+        }
+    })
+
+    app.post('/api/history', (req, res) => {
+        const { time, question, age, gender, tosses, interpretation } = req.body
+        try {
+            const stmt = db.prepare(`
+        INSERT INTO history (time, question, age, gender, tosses, interpretation)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `)
+            const result = stmt.run(
+                time,
+                question,
+                age,
+                gender,
+                JSON.stringify(tosses),
+                interpretation,
+            )
+            res.json({ id: result.lastInsertRowid })
+        } catch (error) {
+            console.error('Error saving history:', error)
+            res.status(500).json({ error: 'Failed to save history' })
+        }
+    })
+
+    app.delete('/api/history/:id', (req, res) => {
+        const { id } = req.params
+        try {
+            db.prepare('DELETE FROM history WHERE id = ?').run(id)
+            res.json({ success: true })
+        } catch (error) {
+            console.error('Error deleting history:', error)
+            res.status(500).json({ error: 'Failed to delete history' })
+        }
+    })
+
+    // Vite middleware for development
+    if (process.env.NODE_ENV !== 'production') {
+        const vite = await createViteServer({
+            server: { middlewareMode: true },
+            appType: 'spa',
+        })
+        app.use(vite.middlewares)
+    } else {
+        app.use(express.static(path.join(__dirname, 'dist')))
+        app.get('*', (req, res) => {
+            res.sendFile(path.join(__dirname, 'dist', 'index.html'))
+        })
+    }
+
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on http://localhost:${PORT}`)
+    })
+}
+
+startServer()
