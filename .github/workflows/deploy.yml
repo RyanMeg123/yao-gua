@@ -1,0 +1,44 @@
+name: Deploy to Aliyun
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            if [ ! -d "/www/wwwroot/yaogua" ]; then
+              git clone https://github.com/RyanMeg123/yao-gua.git /www/wwwroot/yaogua
+            fi
+
+            cd /www/wwwroot/yaogua
+            git pull origin main
+            npm install
+            npm run build
+            pm2 restart yaogua-server || pm2 start server.ts --name yaogua-server --interpreter ts-node
+
+            echo "Deploy success!"
