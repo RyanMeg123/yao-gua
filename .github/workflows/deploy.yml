@@ -12,23 +12,7 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - name: Checkout code
-              uses: actions/checkout@v3
-
-            - name: Setup Node.js
-              uses: actions/setup-node@v3
-              with:
-                  node-version: '18'
-
-            - name: Install dependencies
-              run: |
-                  rm -rf node_modules package-lock.json
-                  npm install
-
-            - name: Build frontend
-              run: npm run build
-
-            - name: Deploy to server
+            - name: Deploy to server via SSH
               uses: appleboy/ssh-action@v1.0.0
               with:
                   host: ${{ secrets.SSH_HOST }}
@@ -38,11 +22,10 @@ jobs:
                       if [ ! -d "/www/wwwroot/yaogua" ]; then
                         git clone https://github.com/RyanMeg123/yao-gua.git /www/wwwroot/yaogua
                       fi
-
                       cd /www/wwwroot/yaogua
                       git pull origin main
+                      rm -rf node_modules package-lock.json
                       npm install
                       npm run build
                       pm2 restart yaogua-server || pm2 start server.ts --name yaogua-server --interpreter ts-node
-
                       echo "Deploy success!"
