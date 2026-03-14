@@ -245,6 +245,9 @@ ${tosses.map((t: any, i: number) => `第${i + 1}次: ${t.coins.map((c: string) =
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'X-Content-Type-Options': 'nosniff',
+        'X-Accel-Buffering': 'no',
+        'Cache-Control': 'no-cache, no-transform',
+        'Transfer-Encoding': 'chunked',
       },
     });
   } catch (error: any) {

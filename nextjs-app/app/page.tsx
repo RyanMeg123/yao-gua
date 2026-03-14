@@ -45,6 +45,7 @@ export default function Home() {
   const [isSpinning, setIsSpinning] = useState(false);
   const [currentCoins, setCurrentCoins] = useState<CoinResult[]>(['H', 'H', 'H']);
   const [interpretation, setInterpretation] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleStart = () => setStep('info');
@@ -125,6 +126,7 @@ export default function Home() {
       // 切到结果页，开始流式渲染
       setStep('result');
       setInterpretation('');
+      setIsStreaming(true);
 
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
@@ -138,6 +140,8 @@ export default function Home() {
         setInterpretation(fullText);
       }
 
+      setIsStreaming(false);
+
       // 流结束后保存历史
       await fetch('/api/history', {
         method: 'POST',
@@ -147,6 +151,7 @@ export default function Home() {
     } catch (err) {
       console.error(err);
       setError('解卦过程中出现错误，请检查网络或 API 配置。');
+      setIsStreaming(false);
       setStep('result');
     }
   };
@@ -179,6 +184,7 @@ export default function Home() {
     setTosses([]);
     setInterpretation(null);
     setError(null);
+    setIsStreaming(false);
     setUserInfo({
       time: new Intl.DateTimeFormat('zh-CN', {
         year: 'numeric',
@@ -570,8 +576,11 @@ export default function Home() {
                         <p className="text-stone-500 animate-pulse text-sm">顾问正在深度解卦...</p>
                       </div>
                     ) : (
-                      <div className="markdown-body">
+                      <div className="markdown-body relative">
                         <Markdown>{interpretation}</Markdown>
+                        {isStreaming && (
+                          <span className="inline-block w-0.5 h-4 bg-amber-600 animate-pulse ml-0.5 align-middle" />
+                        )}
                       </div>
                     )}
 
