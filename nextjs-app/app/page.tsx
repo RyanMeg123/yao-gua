@@ -116,16 +116,33 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userInfo, tosses }),
       });
-      const data = await res.json();
-      const finalInterpretation = data.interpretation || '未能获取解卦结果，请重试。';
-      setInterpretation(finalInterpretation);
-      setStep('result');
 
-      // Save to history
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed');
+      }
+
+      // 切到结果页，开始流式渲染
+      setStep('result');
+      setInterpretation('');
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+        setInterpretation(fullText);
+      }
+
+      // 流结束后保存历史
       await fetch('/api/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...userInfo, tosses, interpretation: finalInterpretation }),
+        body: JSON.stringify({ ...userInfo, tosses, interpretation: fullText }),
       });
     } catch (err) {
       console.error(err);
@@ -544,9 +561,17 @@ export default function Home() {
                           重新开始
                         </button>
                       </div>
+                    ) : interpretation === '' ? (
+                      <div className="flex flex-col items-center py-16 space-y-4">
+                        <div className="relative">
+                          <div className="w-16 h-16 border-4 border-stone-200 border-t-amber-600 rounded-full animate-spin" />
+                          <div className="absolute inset-0 flex items-center justify-center font-serif italic text-stone-400 text-sm">解</div>
+                        </div>
+                        <p className="text-stone-500 animate-pulse text-sm">顾问正在深度解卦...</p>
+                      </div>
                     ) : (
                       <div className="markdown-body">
-                        <Markdown>{interpretation || ''}</Markdown>
+                        <Markdown>{interpretation}</Markdown>
                       </div>
                     )}
 

@@ -215,16 +215,38 @@ ${tosses.map((t: any, i: number) => `第${i + 1}次: ${t.coins.map((c: string) =
 请根据以上信息，按照系统指令的要求进行深度解卦。
 `;
 
-    const completion = await client.chat.completions.create({
+    const stream = await client.chat.completions.create({
       model: 'anthropic/claude-sonnet-4-5',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: prompt },
       ],
       temperature: 0.7,
+      stream: true,
     });
 
-    return NextResponse.json({ interpretation: completion.choices[0].message.content });
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            const text = chunk.choices[0]?.delta?.content || '';
+            if (text) {
+              controller.enqueue(encoder.encode(text));
+            }
+          }
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
   } catch (error: any) {
     console.error('Error detail:', JSON.stringify({
       message: error.message,
