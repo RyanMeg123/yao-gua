@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { prisma } from '@/lib/prisma';
 
 const SYSTEM_PROMPT = `你是一位精通《周易》义理派的现代易学生活顾问。
 你深谙《周易》经传原典与孔子《十翼》的义理体系，
