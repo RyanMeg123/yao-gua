@@ -12,6 +12,7 @@ import {
   LucideChevronLeft,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Coin } from './components/Coin';
@@ -284,7 +285,7 @@ export default function Home() {
                         </div>
                       </div>
                       <div className="prose prose-stone prose-sm max-w-none line-clamp-2 text-stone-500 mb-4">
-                        <Markdown>{item.interpretation}</Markdown>
+                        <Markdown remarkPlugins={[remarkGfm]}>{item.interpretation}</Markdown>
                       </div>
                       <button
                         onClick={() => {
@@ -577,7 +578,7 @@ export default function Home() {
                       </div>
                     ) : (
                       <div className="markdown-body relative">
-                        <Markdown>{interpretation}</Markdown>
+                        <Markdown remarkPlugins={[remarkGfm]}>{interpretation}</Markdown>
                         {isStreaming && (
                           <span className="inline-block w-0.5 h-4 bg-amber-600 animate-pulse ml-0.5 align-middle" />
                         )}
