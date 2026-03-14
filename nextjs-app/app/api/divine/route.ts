@@ -226,10 +226,18 @@ ${tosses.map((t: any, i: number) => `第${i + 1}次: ${t.coins.map((c: string) =
 
     return NextResponse.json({ interpretation: completion.choices[0].message.content });
   } catch (error: any) {
-    console.error('Error:', error);
+    console.error('Error detail:', JSON.stringify({
+      message: error.message,
+      status: error.status,
+      code: error.code,
+      cause: error.cause?.message,
+    }));
     return NextResponse.json(
       { error: error.message || 'Failed to get interpretation' },
       { status: 500 }
     );
   }
 }
+
+// Vercel timeout
+export const maxDuration = 60;
