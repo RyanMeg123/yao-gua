@@ -4,6 +4,7 @@ import 'dotenv/config'
 import express from 'express'
 import { createServer as createViteServer } from 'vite'
 import Database from 'better-sqlite3'
+import type { AddressInfo } from 'node:net'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import OpenAI from 'openai'
@@ -227,7 +228,8 @@ const getOpenRouterClient = () => {
 
 async function startServer() {
     const app = express()
-    const PORT = 3000
+    const requestedPort = Number.parseInt(process.env.PORT ?? '3000', 10)
+    const preferredPort = Number.isNaN(requestedPort) ? 3000 : requestedPort
 
     app.use(express.json())
 
@@ -336,9 +338,41 @@ ${tosses.map((t: any, i: number) => `第${i + 1}次: ${t.coins.map((c: string) =
         })
     }
 
-    app.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server running on http://localhost:${PORT}`)
-    })
+    const isDevelopment = process.env.NODE_ENV !== 'production'
+    const maxAttempts = isDevelopment ? 10 : 1
+
+    for (let offset = 0; offset < maxAttempts; offset += 1) {
+        const port = preferredPort + offset
+
+        try {
+            const server = await new Promise<ReturnType<typeof app.listen>>(
+                (resolve, reject) => {
+                    const instance = app.listen(port, '0.0.0.0')
+                    instance.once('listening', () => resolve(instance))
+                    instance.once('error', reject)
+                },
+            )
+
+            const activePort = (server.address() as AddressInfo).port
+
+            if (activePort !== preferredPort) {
+                console.warn(
+                    `Port ${preferredPort} is busy, using http://localhost:${activePort} instead.`,
+                )
+            } else {
+                console.log(`Server running on http://localhost:${activePort}`)
+            }
+
+            return
+        } catch (error) {
+            const nodeError = error as NodeJS.ErrnoException
+            const isRetryable = nodeError.code === 'EADDRINUSE' && isDevelopment
+
+            if (!isRetryable || offset === maxAttempts - 1) {
+                throw error
+            }
+        }
+    }
 }
 
 startServer()

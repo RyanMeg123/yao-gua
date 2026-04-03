@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/ensure-better-sqlite3.mjs",
     "dev": "tsx server.ts",
+    "prestart": "node scripts/ensure-better-sqlite3.mjs",
     "start": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
